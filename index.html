@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>圣诞树 · 高级逼真特效</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #030308; font-family: 'Georgia', serif; }
+        #greeting {
+            position: absolute; bottom: 8%; left: 0; width: 100%; text-align: center;
+            color: #fff; font-size: clamp(18px, 3vw, 32px); letter-spacing: 8px;
+            text-transform: uppercase; pointer-events: none; z-index: 100; font-weight: 300;
+            text-shadow: 0 0 20px rgba(255,200,100,0.8), 0 0 40px rgba(255,150,50,0.4);
+            animation: titleGlow 4s ease-in-out infinite alternate;
+        }
+        @keyframes titleGlow {
+            0% { opacity: 0.7; text-shadow: 0 0 15px rgba(255,200,100,0.5); }
+            100% { opacity: 1; text-shadow: 0 0 25px rgba(255,220,150,1), 0 0 50px rgba(255,180,80,0.7); }
+        }
+        #hint { position: absolute; top: 20px; right: 24px; color: rgba(255,255,255,0.35); font-size: 11px; letter-spacing: 2px; z-index: 100; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="greeting">Merry Christmas</div>
+    <div id="hint">拖动旋转 · 滚轮缩放</div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x030308);
+        scene.fog = new THREE.FogExp2(0x030308, 0.018);
+
+        const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200);
+        camera.position.set(0, 8, 28);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.04;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.6;
+        controls.target.set(0, 7, 0);
+        controls.minDistance = 14;
+        controls.maxDistance = 50;
+        controls.maxPolarAngle = Math.PI * 0.52;
+        controls.enablePan = false;
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.1, 0.55, 0.75);
+        composer.addPass(bloom);
+        const fxaa = new ShaderPass(FXAAShader);
+        fxaa.uniforms.resolution.value.set(1 / innerWidth, 1 / innerHeight);
+        composer.addPass(fxaa);
+
+        scene.add(new THREE.AmbientLight(0x334455, 0.6));
+        const keyLight = new THREE.PointLight(0xffddaa, 55, 60, 2); keyLight.position.set(8, 16, 12); scene.add(keyLight);
+        const fillLight = new THREE.PointLight(0x88aaff, 25, 50, 2); fillLight.position.set(-10, 8, 8); scene.add(fillLight);
+        const rimLight = new THREE.PointLight(0xffaa66, 30, 50, 2); rimLight.position.set(0, 10, -18); scene.add(rimLight);
+        const groundGlow = new THREE.PointLight(0x4466ff, 8, 25, 2); groundGlow.position.set(0, 0.5, 4); scene.add(groundGlow);
+        const starLight = new THREE.PointLight(0xffdd44, 40, 25, 2); starLight.position.set(0, 15.5, 0); scene.add(starLight);
+
+        function makeNoiseTexture(size = 128) {
+            const c = document.createElement('canvas'); c.width = c.height = size;
+            const ctx = c.getContext('2d'); const img = ctx.createImageData(size, size);
+            for (let i = 0; i < img.data.length; i += 4) {
+                const v = 100 + Math.random() * 155;
+                img.data[i] = v; img.data[i+1] = v; img.data[i+2] = v; img.data[i+3] = 255;
+            }
+            ctx.putImageData(img, 0, 0); return new THREE.CanvasTexture(c);
+        }
+        const noiseTex = makeNoiseTexture();
+
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2010, roughness: 0.92, bumpMap: noiseTex, bumpScale: 0.15 });
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.85, 3.2, 12, 4), trunkMat);
+        trunk.position.y = 1.6; scene.add(trunk);
+
+        const treeGroup = new THREE.Group(); scene.add(treeGroup);
+        const needleColors = [0x0e3a1f, 0x145c2e, 0x1a7a3a, 0x2b9c4a, 0x1f6b30];
+        const LAYERS = 16, BASE_RADIUS = 4.6, TOP_RADIUS = 0.6, BASE_Y = 2.4, TOP_Y = 14.2;
+        const needleGeo = new THREE.ConeGeometry(0.13, 0.55, 5);
+        const needleGeoMid = new THREE.ConeGeometry(0.16, 0.7, 5);
+        const needleGeoBig = new THREE.ConeGeometry(0.2, 0.85, 5);
+        const needleMats = needleColors.map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true, emissive: new THREE.Color(c).multiplyScalar(0.08) }));
+        const allNeedles = [];
+
+        for (let layer = 0; layer < LAYERS; layer++) {
+            const t = layer / (LAYERS - 1);
+            const y = BASE_Y + (TOP_Y - BASE_Y) * t;
+            const radius = BASE_RADIUS * (1 - t) + TOP_RADIUS * t;
+            const count = Math.floor(12 + radius * 10 + Math.random() * 4);
+            for (let i = 0; i < count; i++) {
+                const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+                const rJitter = radius * (0.75 + Math.random() * 0.5);
+                const yJitter = y + (Math.random() - 0.5) * 0.8;
+                const x = Math.cos(angle) * rJitter, z = Math.sin(angle) * rJitter;
+                const sr = Math.random();
+                let geo = sr < 0.5 ? needleGeo : (sr < 0.85 ? needleGeoMid : needleGeoBig);
+                const needle = new THREE.Mesh(geo, needleMats[Math.floor(Math.random() * needleMats.length)]);
+                needle.position.set(x, yJitter, z);
+                needle.rotation.y = angle + Math.PI * 0.5;
+                needle.rotation.z = Math.PI * 0.55 + (Math.random() - 0.5) * 0.5;
+                needle.scale.setScalar(0.8 + Math.random() * 0.5);
+                treeGroup.add(needle);
+                allNeedles.push({ mesh: needle, phase: Math.random() * 6.28, baseRotZ: needle.rotation.z });
+            }
+            for (let i = 0; i < count * 0.5; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const rJitter = radius * (0.3 + Math.random() * 0.4);
+                const needle = new THREE.Mesh(needleGeo, needleMats[Math.floor(Math.random() * needleMats.length)]);
+                needle.position.set(Math.cos(angle) * rJitter, y + (Math.random() - 0.5) * 0.6, Math.sin(angle) * rJitter);
+                needle.rotation.y = angle; needle.rotation.z = Math.PI * 0.6 + (Math.random() - 0.5) * 0.6;
+                needle.scale.setScalar(0.6 + Math.random() * 0.4);
+                treeGroup.add(needle);
+                allNeedles.push({ mesh: needle, phase: Math.random() * 6.28, baseRotZ: needle.rotation.z });
+            }
+        }
+
+        function createStarShape() {
+            const shape = new THREE.Shape(); const outerR = 1.0, innerR = 0.42, points = 5;
+            for (let i = 0; i < points * 2; i++) {
+                const r = i % 2 === 0 ? outerR : innerR;
+                const a = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+                const x = Math.cos(a) * r, y = Math.sin(a) * r;
+                i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y);
+            }
+            shape.closePath(); return shape;
+        }
+        const starGeo = new THREE.ExtrudeGeometry(createStarShape(), { depth: 0.18, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 2 });
+        starGeo.center();
+        const starMat = new THREE.MeshStandardMaterial({ color: 0xffcc33, emissive: 0xffaa00, emissiveIntensity: 2.5, metalness: 0.6, roughness: 0.25 });
+        const starMesh = new THREE.Mesh(starGeo, starMat);
+        starMesh.position.set(0, 15.4, 0); scene.add(starMesh);
+
+        const glowCanvas = document.createElement('canvas'); glowCanvas.width = glowCanvas.height = 256;
+        const gctx = glowCanvas.getContext('2d');
+        const grad = gctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+        grad.addColorStop(0, 'rgba(255,240,180,1)'); grad.addColorStop(0.2, 'rgba(255,200,80,0.8)');
+        grad.addColorStop(0.5, 'rgba(255,150,30,0.3)'); grad.addColorStop(1, 'rgba(255,100,0,0)');
+        gctx.fillStyle = grad; gctx.fillRect(0, 0, 256, 256);
+        const glowTex = new THREE.CanvasTexture(glowCanvas);
+        const starGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.95 }));
+        starGlow.position.copy(starMesh.position); starGlow.scale.setScalar(7); scene.add(starGlow);
+
+        const lightColors = [0xff3333, 0xffaa00, 0x33ff66, 0x33aaff, 0xff33cc, 0xffffff];
+        const spiralBalls = [];
+        const SPIRAL_POINTS = 260, SPIRAL_BASE_Y = 2.6, SPIRAL_TOP_Y = 14.0, SPIRAL_TURNS = 7;
+        for (let i = 0; i < SPIRAL_POINTS; i++) {
+            const t = i / (SPIRAL_POINTS - 1);
+            const y = SPIRAL_BASE_Y + (SPIRAL_TOP_Y - SPIRAL_BASE_Y) * t;
+            const treeRadius = BASE_RADIUS * (1 - t) + TOP_RADIUS * t;
+            const r = treeRadius * 1.02 + 0.15;
+            const angle = t * Math.PI * 2 * SPIRAL_TURNS;
+            const col = lightColors[i % lightColors.length];
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(0.11 + Math.random() * 0.04, 8, 8),
+                new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.8, roughness: 0.3 }));
+            ball.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+            scene.add(ball);
+            spiralBalls.push({ mesh: ball, baseIntensity: 1.6 + Math.random() * 0.8, speed: 1.0 + Math.random() * 3.0, offset: Math.random() * 6.28 });
+        }
+
+        const ornamentColors = [0xff2222, 0xffaa00, 0x2266ff, 0xffdd55, 0xcc33cc, 0xffffff, 0xff6688];
+        const ornaments = [];
+        for (let i = 0; i < 55; i++) {
+            const t = 0.05 + Math.random() * 0.92;
+            const y = BASE_Y + (TOP_Y - BASE_Y) * t;
+            const treeRadius = BASE_RADIUS * (1 - t) + TOP_RADIUS * t;
+            const r = treeRadius * (0.7 + Math.random() * 0.3);
+            const angle = Math.random() * Math.PI * 2;
+            const col = ornamentColors[Math.floor(Math.random() * ornamentColors.length)];
+            const size = 0.18 + Math.random() * 0.12;
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(size, 16, 16),
+                new THREE.MeshStandardMaterial({ color: col, roughness: 0.15, metalness: 0.85, emissive: col, emissiveIntensity: 0.15 }));
+            ball.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+            scene.add(ball);
+            ornaments.push({ mesh: ball, speed: 0.5 + Math.random(), offset: Math.random() * 6.28 });
+        }
+
+        const snowCanvas = document.createElement('canvas'); snowCanvas.width = snowCanvas.height = 64;
+        const sctx = snowCanvas.getContext('2d');
+        const sgrad = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        sgrad.addColorStop(0, 'rgba(255,255,255,1)'); sgrad.addColorStop(0.4, 'rgba(255,255,255,0.9)');
+        sgrad.addColorStop(0.7, 'rgba(220,230,255,0.4)'); sgrad.addColorStop(1, 'rgba(200,220,255,0)');
+        sctx.fillStyle = sgrad; sctx.fillRect(0, 0, 64, 64);
+        const snowSprite = new THREE.CanvasTexture(snowCanvas);
+
+        const SNOW_COUNT = 2000;
+        const snowGeo = new THREE.BufferGeometry();
+        const snowPositions = new Float32Array(SNOW_COUNT * 3);
+        const snowSpeeds = new Float32Array(SNOW_COUNT);
+        const snowPhases = new Float32Array(SNOW_COUNT);
+        for (let i = 0; i < SNOW_COUNT; i++) {
+            snowPositions[i*3] = (Math.random() - 0.5) * 70;
+            snowPositions[i*3+1] = Math.random() * 45;
+            snowPositions[i*3+2] = (Math.random() - 0.5) * 70;
+            snowSpeeds[i] = 0.01 + Math.random() * 0.035;
+            snowPhases[i] = Math.random() * 6.28;
+        }
+        snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
+        const snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ map: snowSprite, color: 0xddeeff, size: 0.55, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85 }));
+        scene.add(snow);
+
+        const bgGeo = new THREE.BufferGeometry();
+        const bgPos = new Float32Array(2000 * 3);
+        const bgCol = new Float32Array(2000 * 3);
+        for (let i = 0; i < 2000; i++) {
+            const r = 80 + Math.random() * 120, theta = Math.random() * 6.28, phi = Math.acos(Math.random() * 2 - 1);
+            bgPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+            bgPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta) * 0.6;
+            bgPos[i*3+2] = r * Math.cos(phi);
+            const c = new THREE.Color().setHSL(0.55 + Math.random() * 0.15, 0.5 + Math.random() * 0.4, 0.7 + Math.random() * 0.3);
+            bgCol[i*3] = c.r; bgCol[i*3+1] = c.g; bgCol[i*3+2] = c.b;
+        }
+        bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+        bgGeo.setAttribute('color', new THREE.BufferAttribute(bgCol, 3));
+        const bgStars = new THREE.Points(bgGeo, new THREE.PointsMaterial({ size: 0.6, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85 }));
+        scene.add(bgStars);
+
+        const groundCanvas = document.createElement('canvas'); groundCanvas.width = groundCanvas.height = 512;
+        const gg = groundCanvas.getContext('2d').createRadialGradient(256, 256, 0, 256, 256, 256);
+        gg.addColorStop(0, 'rgba(80,110,180,0.25)'); gg.addColorStop(1, 'rgba(10,20,50,0)');
+        groundCanvas.getContext('2d').fillStyle = gg; groundCanvas.getContext('2d').fillRect(0, 0, 512, 512);
+        const groundPlane = new THREE.Mesh(new THREE.CircleGeometry(18, 32),
+            new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(groundCanvas), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+        groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.y = 0.05; scene.add(groundPlane);
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta(), t = performance.now() * 0.001;
+            controls.update();
+
+            allNeedles.forEach(n => { n.mesh.rotation.z = n.baseRotZ + Math.sin(t * 1.2 + n.phase) * 0.03; });
+            spiralBalls.forEach(lb => { lb.mesh.material.emissiveIntensity = Math.max(0.4, lb.baseIntensity + Math.sin(t * lb.speed + lb.offset) * 0.9); });
+            ornaments.forEach(o => { o.mesh.material.emissiveIntensity = 0.1 + Math.sin(t * o.speed + o.offset) * 0.08; });
+
+            starMesh.rotation.y += delta * 0.8;
+            starMat.emissiveIntensity = 2.2 + Math.sin(t * 4) * 1.0;
+            starGlow.scale.setScalar(6.5 + Math.sin(t * 3) * 1.2);
+            starLight.intensity = 35 + Math.sin(t * 4) * 15;
+
+            const sp = snow.geometry.attributes.position.array;
+            for (let i = 0; i < SNOW_COUNT; i++) {
+                sp[i*3+1] -= snowSpeeds[i] * delta * 60;
+                sp[i*3] += Math.sin(t * 0.8 + snowPhases[i]) * 0.008;
+                sp[i*3+2] += Math.cos(t * 0.6 + snowPhases[i]) * 0.006;
+                if (sp[i*3+1] < -2) { sp[i*3+1] = 42; sp[i*3] = (Math.random() - 0.5) * 70; sp[i*3+2] = (Math.random() - 0.5) * 70; }
+            }
+            snow.geometry.attributes.position.needsUpdate = true;
+            bgStars.rotation.y += delta * 0.005;
+
+            composer.render();
+        }
+        animate();
+
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+            fxaa.uniforms.resolution.value.set(1 / innerWidth, 1 / innerHeight);
+        });
+    </script>
+</body>
+</html>
